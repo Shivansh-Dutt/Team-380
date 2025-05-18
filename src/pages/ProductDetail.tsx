@@ -1,48 +1,116 @@
 
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { getProductById } from "../types/product";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { useCart } from "../contexts/CartContext";
 import { ArrowLeft, ShoppingCart } from "lucide-react";
+import { supabase, getImageUrl } from "@/integrations/supabase/client";
 
 const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const [product, setProduct] = useState(id ? getProductById(id) : undefined);
+  const [product, setProduct] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const { addToCart, isInCart } = useCart();
   const navigate = useNavigate();
   
-  const isOwner = user && product && user.id === product.seller.id;
+  useEffect(() => {
+    const fetchProduct = async () => {
+      if (!id) {
+        toast.error("Product ID not provided");
+        navigate("/");
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select(`
+            *,
+            profiles:seller_id (username)
+          `)
+          .eq('id', id)
+          .single();
+
+        if (error) throw error;
+
+        if (!data) {
+          toast.error("Product not found");
+          navigate("/");
+          return;
+        }
+
+        // Format the data to match the expected structure
+        const formattedProduct = {
+          ...data,
+          seller: {
+            id: data.seller_id,
+            username: data.profiles?.username || 'Unknown seller'
+          },
+          image: getImageUrl(data.image_url)
+        };
+
+        setProduct(formattedProduct);
+      } catch (error) {
+        console.error("Error fetching product:", error);
+        toast.error("Failed to load product details");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProduct();
+  }, [id, navigate]);
+  
+  const isOwner = user && product && user.id === product.seller_id;
   const alreadyInCart = product && isInCart(product.id);
   
-  useEffect(() => {
-    // Simulate loading the product
-    if (id) {
-      const foundProduct = getProductById(id);
-      setProduct(foundProduct);
-      
-      if (!foundProduct) {
-        toast.error("Product not found");
-        navigate("/");
+  const handleAddToCart = async () => {
+    if (product && user) {
+      try {
+        // Insert into cart_items table
+        const { error } = await supabase
+          .from('cart_items')
+          .insert([
+            { user_id: user.id, product_id: product.id }
+          ]);
+        
+        if (error) {
+          if (error.code === '23505') { // Unique violation
+            toast.error("This item is already in your cart");
+          } else {
+            throw error;
+          }
+          return;
+        }
+        
+        addToCart(product);
+        toast.success("Added to cart");
+      } catch (error) {
+        console.error("Error adding to cart:", error);
+        toast.error("Failed to add to cart");
       }
-    }
-  }, [id, navigate]);
-
-  const handleAddToCart = () => {
-    if (product) {
-      addToCart(product);
-      toast.success("Added to cart");
+    } else if (!user) {
+      toast.error("Please log in to add items to your cart");
+      navigate("/login");
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-52">
+        Loading...
+      </div>
+    );
+  }
 
   if (!product) {
     return (
       <div className="flex justify-center items-center h-52">
-        Loading...
+        Product not found
       </div>
     );
   }
@@ -75,7 +143,7 @@ const ProductDetail = () => {
             </Badge>
             <h1 className="text-2xl font-bold">{product.title}</h1>
             <p className="text-xl font-medium text-primary mt-2">
-              ${product.price.toFixed(2)}
+              ${parseFloat(product.price).toFixed(2)}
             </p>
           </div>
 
@@ -84,7 +152,7 @@ const ProductDetail = () => {
               Seller: <span className="font-medium">{product.seller.username}</span>
             </p>
             <p className="text-muted-foreground text-sm">
-              Listed: {new Date(product.createdAt).toLocaleDateString()}
+              Listed: {new Date(product.created_at).toLocaleDateString()}
             </p>
           </div>
 

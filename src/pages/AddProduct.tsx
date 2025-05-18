@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { ProductCategory, CATEGORIES, addProduct } from "../types/product";
+import { ProductCategory, CATEGORIES } from "../types/product";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +16,8 @@ import {
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
+import ImageUpload from "../components/ImageUpload";
+import { supabase } from "@/integrations/supabase/client";
 
 const AddProduct = () => {
   const { user } = useAuth();
@@ -25,6 +27,7 @@ const AddProduct = () => {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<ProductCategory>("other");
   const [price, setPrice] = useState("");
+  const [imagePath, setImagePath] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,7 +39,7 @@ const AddProduct = () => {
     }
     
     if (!title || !description || !category || !price) {
-      toast.error("Please fill in all fields");
+      toast.error("Please fill in all required fields");
       return;
     }
     
@@ -45,31 +48,42 @@ const AddProduct = () => {
       toast.error("Please enter a valid price");
       return;
     }
+
+    if (!imagePath) {
+      toast.error("Please upload a product image");
+      return;
+    }
     
     setIsSubmitting(true);
     
     try {
-      // In a real app, we'd upload the image to storage
-      const newProduct = addProduct({
-        title,
-        description,
-        category,
-        price: priceValue,
-        image: "/placeholder.svg", // Placeholder image
-        seller: {
-          id: user.id,
-          username: user.username
-        }
-      });
+      const { data: product, error } = await supabase
+        .from('products')
+        .insert([{
+          title,
+          description,
+          category,
+          price: priceValue,
+          image_url: imagePath,
+          seller_id: user.id
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
       
       toast.success("Product listed successfully");
-      navigate(`/product/${newProduct.id}`);
+      navigate(`/product/${product.id}`);
     } catch (error) {
       toast.error("Failed to create listing");
       console.error("Add product error:", error);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleImageUpload = (path: string) => {
+    setImagePath(path);
   };
 
   return (
@@ -160,16 +174,7 @@ const AddProduct = () => {
               <label className="text-sm font-medium">
                 Product Image
               </label>
-              <div className="flex items-center justify-center border-2 border-dashed rounded-md p-6 bg-muted">
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Image placeholder
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    (In a full implementation, you would be able to upload an image here)
-                  </p>
-                </div>
-              </div>
+              <ImageUpload onUploadComplete={handleImageUpload} />
             </div>
             
             <div className="pt-4">

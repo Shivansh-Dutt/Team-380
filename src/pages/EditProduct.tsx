@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { ProductCategory, CATEGORIES, getProductById, updateProduct } from "../types/product";
+import { ProductCategory, CATEGORIES } from "../types/product";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +16,8 @@ import {
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
+import ImageUpload from "../components/ImageUpload";
+import { supabase, getImageUrl } from "@/integrations/supabase/client";
 
 const EditProduct = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,36 +28,52 @@ const EditProduct = () => {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<ProductCategory>("other");
   const [price, setPrice] = useState("");
+  const [imagePath, setImagePath] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!id) {
-      navigate("/my-listings");
-      return;
-    }
+    const fetchProduct = async () => {
+      if (!id || !user) {
+        navigate("/my-listings");
+        return;
+      }
 
-    const product = getProductById(id);
-    
-    if (!product) {
-      toast.error("Product not found");
-      navigate("/my-listings");
-      return;
-    }
+      try {
+        const { data: product, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', id)
+          .single();
 
-    // Check if the current user is the owner of this product
-    if (user && product.seller.id !== user.id) {
-      toast.error("You don't have permission to edit this product");
-      navigate("/my-listings");
-      return;
-    }
+        if (error || !product) {
+          toast.error("Product not found");
+          navigate("/my-listings");
+          return;
+        }
 
-    // Populate form fields
-    setTitle(product.title);
-    setDescription(product.description);
-    setCategory(product.category);
-    setPrice(product.price.toString());
-    setIsLoading(false);
+        // Check if the current user is the owner of this product
+        if (product.seller_id !== user.id) {
+          toast.error("You don't have permission to edit this product");
+          navigate("/my-listings");
+          return;
+        }
+
+        // Populate form fields
+        setTitle(product.title);
+        setDescription(product.description);
+        setCategory(product.category as ProductCategory);
+        setPrice(product.price.toString());
+        setImagePath(product.image_url);
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Error fetching product:", error);
+        toast.error("Failed to load product details");
+        navigate("/my-listings");
+      }
+    };
+
+    fetchProduct();
   }, [id, user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,7 +85,7 @@ const EditProduct = () => {
     }
     
     if (!title || !description || !category || !price) {
-      toast.error("Please fill in all fields");
+      toast.error("Please fill in all required fields");
       return;
     }
     
@@ -76,29 +94,43 @@ const EditProduct = () => {
       toast.error("Please enter a valid price");
       return;
     }
+
+    if (!imagePath) {
+      toast.error("Please upload a product image");
+      return;
+    }
     
     setIsSubmitting(true);
     
     try {
-      const updatedProduct = updateProduct(id, {
-        title,
-        description,
-        category,
-        price: priceValue
-      });
+      const { data: product, error } = await supabase
+        .from('products')
+        .update({
+          title,
+          description,
+          category,
+          price: priceValue,
+          image_url: imagePath,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
       
-      if (updatedProduct) {
-        toast.success("Product updated successfully");
-        navigate(`/product/${updatedProduct.id}`);
-      } else {
-        throw new Error("Failed to update product");
-      }
+      toast.success("Product updated successfully");
+      navigate(`/product/${product.id}`);
     } catch (error) {
       toast.error("Failed to update listing");
       console.error("Update product error:", error);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleImageUpload = (path: string) => {
+    setImagePath(path);
   };
 
   if (isLoading) {
@@ -193,16 +225,10 @@ const EditProduct = () => {
               <label className="text-sm font-medium">
                 Product Image
               </label>
-              <div className="flex items-center justify-center border-2 border-dashed rounded-md p-6 bg-muted">
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Image placeholder
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    (In a full implementation, you would be able to update the image here)
-                  </p>
-                </div>
-              </div>
+              <ImageUpload 
+                onUploadComplete={handleImageUpload}
+                existingImage={imagePath ? getImageUrl(imagePath) : undefined}
+              />
             </div>
             
             <div className="pt-4">
