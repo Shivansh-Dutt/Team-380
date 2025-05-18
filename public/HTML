@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Placeholder Image Gallery</title>
+  <style>
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 20px;
+      padding: 20px;
+    }
+    .gallery img {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Gallery with Uploaded Images</h1>
+
+  <div class="gallery">
+    <img src="/mnt/data/Milk.webp" alt="Milk pouring in glass">
+    <img src="/mnt/data/yog Mat.jpg" alt="Yoga mat setup">
+    <img src="/mnt/data/wooden.jpg" alt="Wooden toy blocks">
+    <img src="/mnt/data/Litereture collection.jpg" alt="Bookshelf">
+    <img src="/mnt/data/coffe Table.jpg" alt="Coffee table and sofa">
+    <img src="/mnt/data/iphone 11.avif" alt="iPhone 11">
+    <img src="/mnt/data/vacket.jpeg" alt="Green velvet jacket">
+  </div>
+
+</body>
+</html>
